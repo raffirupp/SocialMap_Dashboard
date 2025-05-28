@@ -28,7 +28,8 @@ def load_items() -> pd.DataFrame:
     date_cols = ["lastEditDate", "projectStartDate", "projectEndDate", "resubmissionDate"]
     for col in date_cols:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], unit="ms", errors="coerce")
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df[col] = pd.to_datetime(df[col], unit="ms", errors="coerce"))
 
     # Email-Domain
     if "email" in df.columns:
