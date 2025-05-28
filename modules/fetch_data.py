@@ -3,49 +3,49 @@ import requests
 
 def load_items():
     url = "https://public.socialmap-berlin.de/items"
+    
     try:
-        response = requests.get(url, timeout=30)  # Timeout verlängert
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
         data = response.json()
-
-        print(f"✅ API-Antwortgröße: {len(response.content) / 1024:.2f} KB")
+        print(f"✅ API-Antwortgröße: {len(response.content)/1024:.2f} KB")
         print(f"🔢 Anzahl Items: {len(data)}")
         
-        # Analysiere die Struktur der API
-        print(f"🔍 API-Daten: {data.keys()}")
-        items = data.get("items", [])
-        print(f"🔢 Anzahl items: {len(items)}")
+        # Wenn API 'items' enthält, extrahiere nur diese
+        items = data.get('items', [])
+        print(f"🔢 Anzahl Einträge: {len(items)}")
 
     except Exception as e:
-        print(f"⚠️ Fehler beim Laden der API: {e}")
-        items = [
-            {"title": "Test-Eintrag", "zip": "10115", "lastEditDate": 1622547800000}
-        ]
+        print(f"⚠️ Fehler beim Abrufen der API-Daten: {e}")
+        items = []
 
     if not items:
-        print("⚠️ Achtung: Keine Items aus API geladen. Leere DataFrame wird zurückgegeben.")
+        print("⚠️ Achtung: Keine Daten geladen. Das Dashboard zeigt keine Einträge.")
         return pd.DataFrame()
 
+    # Daten normalisieren (verschachtelte JSON in flache Tabelle)
     df = pd.json_normalize(items)
     print(f"🔎 Spalten im DataFrame: {list(df.columns)}")
     print(f"🔢 Anzahl Zeilen: {len(df)}")
 
-    # Datumsspalten umwandeln, robust gegen fehlerhafte Werte
+    # Datumsfelder umwandeln – robust und fehlervermeidend
     for col in ["lastEditDate", "projectStartDate"]:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            valid_values = df[col].dropna()
-            if not valid_values.empty:
-                print(f"🔍 Spalte {col}: Max: {valid_values.max()}, Min: {valid_values.min()}")
-                df[col] = pd.to_datetime(df[col], unit='ms', errors='coerce')
+            print(f"🔍 Spalte {col} gefunden. Konvertiere Werte.")
+            # Sicherstellen, dass nur gültige Zahlen (z.B. Unix-Millisekunden) verarbeitet werden
+            numeric_mask = pd.to_numeric(df[col], errors='coerce').notna()
+            print(f"🔢 Gültige Werte für {col}: {numeric_mask.sum()} von {len(df)}")
+            if numeric_mask.any():
+                df.loc[numeric_mask, col] = pd.to_datetime(df.loc[numeric_mask, col], unit='ms', errors='coerce')
+                df.loc[~numeric_mask, col] = pd.NaT
             else:
-                print(f"⚠️ Spalte {col} enthält keine gültigen numerischen Werte.")
+                print(f"⚠️ Spalte {col} enthält keine gültigen numerischen Werte. Setze alle auf NaT.")
                 df[col] = pd.NaT
         else:
-            print(f"⚠️ Spalte {col} fehlt in den Daten. Spalte wird mit NaT gefüllt.")
+            print(f"⚠️ Spalte {col} nicht vorhanden. Setze alle Werte auf NaT.")
             df[col] = pd.NaT
 
-    # Domain extrahieren
+    # E-Mail-Domains extrahieren, falls Spalte vorhanden
     if "email" in df.columns:
         df["domain"] = df["email"].str.extract(r"@([\w\.-]+)").fillna("")
     else:
