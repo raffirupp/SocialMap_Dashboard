@@ -1,0 +1,12 @@
+streamlit
+geopandas
+pandas
+matplotlib
+contextily
+requests
+plotly
+kaleido
+beautifulsoup4
+lxml
+html5lib
+openpyxl

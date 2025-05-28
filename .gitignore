@@ -1,0 +1,22 @@
+# Python-Bytecode
+__pycache__/
+*.py[cod]
+
+# Virtuelle Environments
+.venv/
+env/
+venv/
+geo_env/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# Streamlit-Cache
+.streamlit/cache/
+
+# Daten-Caches / GeoJSON-Dumps
+data/*.geojson
+
+# Betriebssystemdateien
+.DS_Store
+Thumbs.db
