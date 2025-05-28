@@ -3,32 +3,52 @@ import requests
 
 def load_items():
     url = "https://public.socialmap-berlin.de/items"
-    response = requests.get(url)
-    data = response.json()
+    try:
+        response = requests.get(url, timeout=30)  # Timeout verlängert
+        response.raise_for_status()
+        data = response.json()
 
-    df = pd.json_normalize(data)
+        print(f"✅ API-Antwortgröße: {len(response.content) / 1024:.2f} KB")
+        print(f"🔢 Anzahl Items: {len(data)}")
+        
+        # Analysiere die Struktur der API
+        print(f"🔍 API-Daten: {data.keys()}")
+        items = data.get("items", [])
+        print(f"🔢 Anzahl items: {len(items)}")
 
+    except Exception as e:
+        print(f"⚠️ Fehler beim Laden der API: {e}")
+        items = [
+            {"title": "Test-Eintrag", "zip": "10115", "lastEditDate": 1622547800000}
+        ]
+
+    if not items:
+        print("⚠️ Achtung: Keine Items aus API geladen. Leere DataFrame wird zurückgegeben.")
+        return pd.DataFrame()
+
+    df = pd.json_normalize(items)
+    print(f"🔎 Spalten im DataFrame: {list(df.columns)}")
+    print(f"🔢 Anzahl Zeilen: {len(df)}")
+
+    # Datumsspalten umwandeln, robust gegen fehlerhafte Werte
     for col in ["lastEditDate", "projectStartDate"]:
         if col in df.columns:
-            # Prüfen, ob überhaupt Werte da sind
-            if df[col].notna().sum() > 0:
-                try:
-                    # Nur die Zeilen, die numerisch sind (oder wo es Sinn macht)
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-                    # NaN (nicht umwandelbar) bleibt NaT
-                    df[col] = pd.to_datetime(df[col], unit="ms", errors="coerce")
-                except Exception as e:
-                    print(f"Fehler bei Spalte {col}: {e}")
-                    df[col] = pd.NaT  # Setze alles auf NaT bei Fehler
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            valid_values = df[col].dropna()
+            if not valid_values.empty:
+                print(f"🔍 Spalte {col}: Max: {valid_values.max()}, Min: {valid_values.min()}")
+                df[col] = pd.to_datetime(df[col], unit='ms', errors='coerce')
             else:
-                print(f"Spalte {col} ist leer oder hat keine gültigen Werte.")
+                print(f"⚠️ Spalte {col} enthält keine gültigen numerischen Werte.")
                 df[col] = pd.NaT
         else:
-            print(f"Spalte {col} ist nicht vorhanden.")
+            print(f"⚠️ Spalte {col} fehlt in den Daten. Spalte wird mit NaT gefüllt.")
             df[col] = pd.NaT
 
     # Domain extrahieren
     if "email" in df.columns:
         df["domain"] = df["email"].str.extract(r"@([\w\.-]+)").fillna("")
+    else:
+        print("⚠️ Spalte 'email' fehlt – keine Domains extrahiert.")
 
     return df

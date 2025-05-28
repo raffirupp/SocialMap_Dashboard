@@ -6,45 +6,43 @@ from modules.fehlzuordnungen import show_unmatched
 from modules.zeitliche_analyse import show_time_analysis
 from modules.kategorien import show_category_plots
 from modules.email_domains import show_email_domains
-from modules.plz_mapping import load_mapping  # <- Import statt eigene Funktion
+from modules.plz_mapping import load_mapping
 
-# Konfiguration
-st.set_page_config(page_title="Paritätisches Dashboard", layout="wide")
-
-# --- Daten laden ---
-df = load_items()
-
-# zip in str umwandeln, um Merge sicherzustellen
-df['zip'] = df['zip'].astype(str).str.strip()
-
-# Mapping laden
-mapping = load_mapping('data/PLZ_Matching.xlsx')
-mapping['PLZ'] = mapping['PLZ'].astype(str).str.strip()
-
-# Merge auf PLZ → neue Spalten 'Bezirk' und 'Stadtteil'
-df = df.merge(
-    mapping[['PLZ', 'Bezirk', 'Stadtteil']],
-    how='left', left_on='zip', right_on='PLZ'
+# Streamlit-Seitenkonfiguration
+st.set_page_config(
+    page_title="Social Map Berlin Dashboard", 
+    layout="wide", 
+    page_icon="🌍"
 )
 
-# Umbenennen für bessere Lesbarkeit
+# Daten laden
+df = load_items()
+if 'zip' not in df.columns:
+    st.warning("⚠️ Es wurden keine Postleitzahlen aus der API geladen. Das Dashboard ist daher möglicherweise unvollständig.")
+    df['zip'] = None
+
+df['zip'] = df['zip'].astype(str).str.strip()
+
+# Postleitzahl-Mapping laden und mit Daten verbinden
+mapping = load_mapping('data/PLZ_Matching.xlsx')
+mapping['PLZ'] = mapping['PLZ'].astype(str).str.strip()
+df = df.merge(mapping[['PLZ', 'Bezirk', 'Stadtteil']], how='left', left_on='zip', right_on='PLZ')
 df.rename(columns={'zip': 'Postleitzahl'}, inplace=True)
 
-# --- Sidebar ---
-menu = st.sidebar.radio(
-    "Bereiche",
+# Sidebar (mit besserer Benutzerführung)
+menu = st.sidebar.selectbox(
+    "🔎 Wähle einen Bereich:",
     [
         "Einleitung",
         "Datenübersicht",
         "Zeitliche Analyse",
         "Kategorien",
         "Email-Domains",
-        "Unzugeordnete Einträge"  # <- NEU
+        "Unzugeordnete Einträge"
     ]
 )
 
-
-# Dashboard-Rendering
+# Haupt-Dashboard-Rendering
 def render_dashboard():
     if menu == "Einleitung":
         show_intro(df)
@@ -52,46 +50,35 @@ def render_dashboard():
     elif menu == "Datenübersicht":
         st.header("📊 Datenübersicht")
 
-        st.markdown("""
-        In der folgenden Übersicht erhältst du einen ersten Einblick in den aktuellen Datenbestand der Social Map Berlin.
+        st.markdown(f"""
+        Dieses Dashboard enthält aktuell **{len(df):,} Einträge**.  
+        Jeder Eintrag beschreibt ein soziales Projekt, Angebot oder eine Einrichtung in Berlin oder Umgebung.
 
-        Insgesamt sind derzeit **{:,} Einträge** in der Datenbank enthalten.  
-        Jeder dieser Einträge beschreibt ein soziales Projekt, Angebot oder eine Einrichtung in Berlin oder Umgebung.
-
-        Die Tabelle unten zeigt die Struktur des Datensatzes anhand von 10 Beispielen – also welche Spalten bzw. Variablen zur Verfügung stehen.  
-        Diese Felder bilden die Grundlage für alle weiteren Auswertungen im Dashboard und diese können wir in der Zukunft gerne für euch auswerten.
-        """.format(len(df)))
-
-        st.subheader("🔍 Beispielhafte Datensätze")
+        Die Tabelle unten zeigt **10 Beispieleinträge**, damit du siehst, welche Informationen im Datensatz enthalten sind.  
+        Diese Informationen bilden die Grundlage für alle weiteren Auswertungen im Dashboard.
+        """)
+        st.subheader("📋 Beispielhafte Datensätze")
         st.dataframe(df.head(10))
 
         st.markdown("---")
-        st.subheader("📌 Informationen zur Postleitzahl-Zuordnung")
+        st.subheader("📌 Postleitzahlen und Zuordnung")
 
-        st.markdown("""
-        Insgesamt enthalten **{:,} Einträge eine Postleitzahl**.  
-        Davon konnten **{:,} eindeutig einem Berliner Bezirk** zugeordnet werden.
+        st.markdown(f"""
+        - **{df['Postleitzahl'].notna().sum():,} Einträge** enthalten eine Postleitzahl.  
+        - Davon konnten **{df['Bezirk'].notna().sum():,} Einträge** einem Berliner Bezirk zugeordnet werden.  
+        - **{df['Stadtteil'].notna().sum():,} Einträge** enthalten eine Stadtteil-Zuordnung.  
+        - Es sind **{df['domain'].notna().sum() if 'domain' in df.columns else 0:,} Einträge** mit einer E-Mail-Domain verfügbar.
 
-        Auch **{:,} Einträge** konnten zusätzlich einem Stadtteil zugewiesen werden.  
-        Die Domain (z. B. für Mailkontakt) ist bei **{:,} Einträgen** verfügbar. 
-
-        In Einzelfällen fehlen diese Zuordnungen, z. B. weil die PLZ nicht im Berliner Raum liegt  
-        oder ein **Tippfehler** vorliegt. Diese werden im Abschnitt **„Unzugeordnete Einträge“** separat aufgeführt. 
-        """.format(
-            df['Postleitzahl'].notna().sum(),
-            df['Bezirk'].notna().sum(),
-            df['Stadtteil'].notna().sum(),
-            df['domain'].notna().sum() if 'domain' in df.columns else 0
-        ))
-        st.markdown("### 📋 Alle vorkommenden Kategorien`")
-
+        In manchen Fällen fehlen diese Angaben, zum Beispiel bei fehlerhaften Postleitzahlen oder weil die Daten außerhalb von Berlin liegen.  
+        Diese werden im Abschnitt **„Unzugeordnete Einträge“** aufgeführt.
+        """)
+        st.markdown("### 🗂️ Alle vorkommenden Kategorien")
         if "primaryTopic" in df.columns:
             unique_topics = df["primaryTopic"].dropna().unique()
-            st.write(f"Insgesamt **{len(unique_topics)} unterschiedliche Werte**, die als Grundlage für die Kategorien-Auswertung dienen und wieder auf deutsch übersetzt wurden`:")
+            st.write(f"Insgesamt gibt es **{len(unique_topics)} unterschiedliche Kategorien**, die für die Auswertung genutzt werden:")
             st.write(sorted(unique_topics))
         else:
-            st.warning("Spalte `primaryTopic` nicht vorhanden.")
-
+            st.warning("Die Spalte `primaryTopic` ist nicht verfügbar.")
 
     elif menu == "Zeitliche Analyse":
         show_time_analysis(df)
@@ -100,22 +87,10 @@ def render_dashboard():
         show_category_plots(df)
 
     elif menu == "Email-Domains":
-        st.header("✉️ Email-Domain-Analyse nach Bezirk/Stadtteil")
+        st.header("✉️ Email-Domain-Analyse nach Bezirk")
         bezirke = ['Alle'] + sorted(df['Bezirk'].dropna().unique().tolist())
-        sel_b = st.selectbox("Bezirk wählen:", bezirke)
-        if sel_b != 'Alle':
-            df_b = df[df['Bezirk'] == sel_b]
-            st.write(f"**Auswahl Bezirk:** {sel_b}")
-            st.subheader("Stadtteil wählen")
-            stadtteile = ['Alle'] + sorted(df_b['Stadtteil'].dropna().unique().tolist())
-            sel_s = st.selectbox("Stadtteil wählen:", stadtteile)
-            if sel_s != 'Alle':
-                sub_df = df_b[df_b['Stadtteil'] == sel_s]
-                st.write(f"**Auswahl Stadtteil:** {sel_s}")
-            else:
-                sub_df = df_b
-        else:
-            sub_df = df
+        selected_bezirk = st.selectbox("Bezirk auswählen:", bezirke)
+        sub_df = df if selected_bezirk == 'Alle' else df[df['Bezirk'] == selected_bezirk]
         show_email_domains(sub_df)
 
     elif menu == "Unzugeordnete Einträge":
