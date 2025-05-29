@@ -15,8 +15,10 @@ st.set_page_config(
     page_icon="🌍"
 )
 
-# Daten laden
-df = load_items()
+# Daten laden mit Fallback-Info
+df, data_source = load_items()
+st.sidebar.info(f"💾 Datenquelle: {data_source.upper()}")
+
 if 'zip' not in df.columns:
     st.warning("⚠️ Es wurden keine Postleitzahlen aus der API geladen. Das Dashboard ist daher möglicherweise unvollständig.")
     df['zip'] = None

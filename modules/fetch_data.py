@@ -3,52 +3,53 @@ import requests
 
 def load_items():
     url = "https://public.socialmap-berlin.de/items"
-    
+    fallback_path = "data/api_snapshot.csv"
+    data_source = "API"
+
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         data = response.json()
+
         print(f"✅ API-Antwortgröße: {len(response.content)/1024:.2f} KB")
-        print(f"🔢 Anzahl Items: {len(data)}")
-        
-        # Wenn API 'items' enthält, extrahiere nur diese
-        items = data.get('items', [])
-        print(f"🔢 Anzahl Einträge: {len(items)}")
+        print(f"🔢 Anzahl Items (roh): {len(data)}")
+
+        # Extrahiere die tatsächlichen Items aus dem JSON
+        if isinstance(data, dict) and "items" in data:
+            data = data["items"]
+            print(f"📥 Anzahl Items extrahiert: {len(data)}")
+
+        if not data:
+            raise ValueError("⚠️ API-Daten sind leer.")
+
+        df = pd.json_normalize(data)
+        print(f"✅ Daten erfolgreich aus der API geladen. Anzahl Zeilen: {len(df)}")
 
     except Exception as e:
-        print(f"⚠️ Fehler beim Abrufen der API-Daten: {e}")
-        items = []
+        print(f"⚠️ Fehler beim Laden der API: {e}")
+        print(f"📂 Versuche stattdessen Daten aus {fallback_path} zu laden...")
+        data_source = "Fallback"
 
-    if not items:
-        print("⚠️ Achtung: Keine Daten geladen. Das Dashboard zeigt keine Einträge.")
-        return pd.DataFrame()
+        try:
+            df = pd.read_csv(fallback_path)
+            print(f"✅ Fallback-Daten erfolgreich geladen. Anzahl Zeilen: {len(df)}")
+        except Exception as fallback_e:
+            print(f"❌ Fehler beim Laden des Fallbacks: {fallback_e}")
+            df = pd.DataFrame()  # Leerer DataFrame als Notlösung
 
-    # Daten normalisieren (verschachtelte JSON in flache Tabelle)
-    df = pd.json_normalize(items)
-    print(f"🔎 Spalten im DataFrame: {list(df.columns)}")
-    print(f"🔢 Anzahl Zeilen: {len(df)}")
-
-    # Datumsfelder umwandeln – robust und fehlervermeidend
+    # Datumsspalten verarbeiten
     for col in ["lastEditDate", "projectStartDate"]:
         if col in df.columns:
-            print(f"🔍 Spalte {col} gefunden. Konvertiere Werte.")
-            # Sicherstellen, dass nur gültige Zahlen (z.B. Unix-Millisekunden) verarbeitet werden
-            numeric_mask = pd.to_numeric(df[col], errors='coerce').notna()
-            print(f"🔢 Gültige Werte für {col}: {numeric_mask.sum()} von {len(df)}")
-            if numeric_mask.any():
-                df.loc[numeric_mask, col] = pd.to_datetime(df.loc[numeric_mask, col], unit='ms', errors='coerce')
-                df.loc[~numeric_mask, col] = pd.NaT
-            else:
-                print(f"⚠️ Spalte {col} enthält keine gültigen numerischen Werte. Setze alle auf NaT.")
+            try:
+                df[col] = pd.to_datetime(pd.to_numeric(df[col], errors="coerce"), unit="ms", errors="coerce")
+            except Exception as e:
+                print(f"⚠️ Fehler beim Konvertieren von {col}: {e}")
                 df[col] = pd.NaT
         else:
-            print(f"⚠️ Spalte {col} nicht vorhanden. Setze alle Werte auf NaT.")
-            df[col] = pd.NaT
+            print(f"ℹ️ Spalte {col} nicht vorhanden.")
 
-    # E-Mail-Domains extrahieren, falls Spalte vorhanden
+    # Domain aus Email extrahieren
     if "email" in df.columns:
         df["domain"] = df["email"].str.extract(r"@([\w\.-]+)").fillna("")
-    else:
-        print("⚠️ Spalte 'email' fehlt – keine Domains extrahiert.")
 
-    return df
+    return df, data_source  # Rückgabe von DataFrame und Datenquelle
