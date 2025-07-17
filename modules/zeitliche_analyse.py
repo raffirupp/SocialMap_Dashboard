@@ -19,14 +19,6 @@ def show_time_analysis(df):
         )
         st.plotly_chart(fig_gesamt, use_container_width=True)
 
-        png_bytes = fig_gesamt.to_image(format="png", width=800, height=400)
-        st.download_button(
-            label="Download Berlin-Gesamt-Histogramm",
-            data=png_bytes,
-            file_name="lastEditDate_gesamt.png",
-            mime="image/png"
-        )
-
     # --- 2. Bezirksvergleich ---
     st.markdown("---")
     st.subheader("📊 Bezirksvergleich (Mehrfachauswahl)")
@@ -56,11 +48,3 @@ def show_time_analysis(df):
             bargap=0.1
         )
         st.plotly_chart(fig_vergleich, use_container_width=True)
-
-        png_bytes2 = fig_vergleich.to_image(format="png", width=800, height=400)
-        st.download_button(
-            label="Download Bezirksvergleich-Histogramm",
-            data=png_bytes2,
-            file_name="lastEditDate_vergleich.png",
-            mime="image/png"
-        )
