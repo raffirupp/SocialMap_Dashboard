@@ -1,6 +1,10 @@
 [theme]
 base="light"
-primaryColor="#0066CC"
+primaryColor="#0063A6"      # Blau – Hauptfarbe
+accentColor="#CC051C"       # Rot – Akzentfarbe
+backgroundColor="#FFFFFF"
+secondaryBackgroundColor="#F7F9FB"
+textColor="#333333"
 font="sans serif"
 
 [server]
